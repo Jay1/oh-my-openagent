@@ -12,7 +12,7 @@ import type {
 } from "./types"
 
 // Import real shared module to avoid mock leaking to other test files
-import * as shared from "../../shared"
+import * as logger from "../../shared/logger"
 
 type AutoSlashCommandModule = typeof import("./hook")
 
@@ -47,7 +47,7 @@ describe("createAutoSlashCommandHook", () => {
     clearCommandLoaderCache()
     mock.restore()
     logCalls = []
-    spyOn(shared, "log").mockImplementation((message: string, data?: unknown) => {
+    spyOn(logger, "log").mockImplementation((message: string, data?: unknown) => {
       logCalls.push([message, data])
     })
     tempDir = mkdtempSync(join(tmpdir(), "omo-auto-slash-hook-test-"))

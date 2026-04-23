@@ -1,10 +1,8 @@
 import { dirname } from "path"
-import {
-  resolveCommandsInText,
-  resolveFileReferencesInText,
-} from "../../shared"
+import { resolveFileReferencesInText } from "../../shared/file-reference-resolver"
+import { resolveCommandsInText } from "../../shared/command-executor/resolve-commands-in-text"
 import { discoverAllSkills, type LoadedSkill, type LazyContentLoader } from "../../features/opencode-skill-loader"
-import { discoverCommandsSync } from "../../tools/slashcommand"
+import { discoverCommandsSync } from "../../tools/slashcommand/command-discovery"
 import type { CommandInfo as DiscoveredCommandInfo, CommandMetadata } from "../../tools/slashcommand/types"
 import type { ParsedSlashCommand } from "./types"
 

@@ -1,16 +1,55 @@
 import { afterEach, describe, expect, it, mock } from "bun:test"
 
+type CapturedPostHogMessage = {
+  distinctId: string
+  event: string
+  properties?: Record<string, unknown>
+}
+
 async function importPostHogModule(): Promise<typeof import("./posthog")> {
   return import(`./posthog?test=${Date.now()}-${Math.random()}`)
+}
+
+function enableTelemetryEnv(): void {
+  process.env.OMO_DISABLE_POSTHOG = "0"
+  process.env.OMO_SEND_ANONYMOUS_TELEMETRY = "1"
+  process.env.POSTHOG_API_KEY = "test-api-key"
+}
+
+function clearTelemetryEnv(): void {
+  delete process.env.OMO_DISABLE_POSTHOG
+  delete process.env.OMO_SEND_ANONYMOUS_TELEMETRY
+  delete process.env.POSTHOG_API_KEY
+  delete process.env.POSTHOG_HOST
+}
+
+function mockPostHogNode(capturedMessages: CapturedPostHogMessage[]): void {
+  mock.module("posthog-node", () => ({
+    PostHog: class {
+      capture(message: CapturedPostHogMessage): void {
+        capturedMessages.push(message)
+      }
+      captureException(): void {}
+      async shutdown(): Promise<void> {}
+    },
+  }))
+}
+
+function mockActivityState(state: {
+  dayUTC: string
+  hourUTC: string
+  captureDaily: boolean
+  captureHourly: boolean
+}): void {
+  mock.module("./posthog-activity-state", () => ({
+    getPostHogActivityCaptureState: () => state,
+  }))
 }
 
 describe("posthog client creation", () => {
   afterEach(() => {
     mock.restore()
-    delete process.env.OMO_DISABLE_POSTHOG
-    delete process.env.OMO_SEND_ANONYMOUS_TELEMETRY
-    delete process.env.POSTHOG_API_KEY
-    delete process.env.POSTHOG_HOST
+    clearTelemetryEnv()
   })
 
   it("returns a no-op client when PostHog construction throws", async () => {
@@ -53,5 +92,68 @@ describe("posthog client creation", () => {
     expect(() => pluginPostHog.captureException(new Error("plugin failure"), "plugin")).not.toThrow()
     expect(() => pluginPostHog.trackActive("plugin", "plugin_loaded")).not.toThrow()
     await expect(pluginPostHog.shutdown()).resolves.toBeUndefined()
+  })
+})
+
+describe("posthog trackActive emission contract", () => {
+  afterEach(() => {
+    mock.restore()
+    clearTelemetryEnv()
+  })
+
+  it("emits exactly one omo_daily_active and never omo_hourly_active when captureDaily is true", async () => {
+    // given
+    enableTelemetryEnv()
+    const captured: CapturedPostHogMessage[] = []
+    mockPostHogNode(captured)
+    mockActivityState({
+      dayUTC: "2026-04-18",
+      hourUTC: "2026-04-18T09",
+      captureDaily: true,
+      captureHourly: true,
+    })
+    const { createCliPostHog } = await importPostHogModule()
+    const client = createCliPostHog()
+
+    // when
+    client.trackActive("distinct-cli", "run_started")
+
+    // then
+    expect(captured).toHaveLength(1)
+    const emittedEvents = captured.map((message) => message.event)
+    expect(emittedEvents).not.toContain("omo_hourly_active")
+    const [dailyEvent] = captured
+    expect(dailyEvent?.event).toBe("omo_daily_active")
+    expect(dailyEvent?.distinctId).toBe("distinct-cli")
+    expect(dailyEvent?.properties).toMatchObject({
+      day_utc: "2026-04-18",
+      reason: "run_started",
+      source: "cli",
+    })
+    expect(dailyEvent?.properties).not.toHaveProperty("hour_utc")
+  })
+
+  it("emits nothing and never omo_hourly_active when captureDaily is false", async () => {
+    // given
+    enableTelemetryEnv()
+    const captured: CapturedPostHogMessage[] = []
+    mockPostHogNode(captured)
+    mockActivityState({
+      dayUTC: "2026-04-18",
+      hourUTC: "2026-04-18T09",
+      captureDaily: false,
+      captureHourly: true,
+    })
+    const { createPluginPostHog } = await importPostHogModule()
+    const client = createPluginPostHog()
+
+    // when
+    client.trackActive("distinct-plugin", "plugin_loaded")
+
+    // then
+    expect(captured).toHaveLength(0)
+    const emittedEvents = captured.map((message) => message.event)
+    expect(emittedEvents).not.toContain("omo_daily_active")
+    expect(emittedEvents).not.toContain("omo_hourly_active")
   })
 })

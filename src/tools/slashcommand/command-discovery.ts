@@ -1,16 +1,15 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs"
 import { basename, join } from "path"
-import {
-  parseFrontmatter,
-  sanitizeModelField,
-  findProjectOpencodeCommandDirs,
-  getOpenCodeCommandDirs,
-  discoverPluginCommandDefinitions,
-  EXCLUDED_DIRS,
-} from "../../shared"
+import { parseFrontmatter } from "../../shared/frontmatter"
+import { sanitizeModelField } from "../../shared/model-sanitizer"
+import { findProjectOpencodeCommandDirs } from "../../shared/project-discovery-dirs"
+import { getOpenCodeCommandDirs } from "../../shared/opencode-command-dirs"
+import { discoverPluginCommandDefinitions } from "../../shared/plugin-command-discovery"
+import { EXCLUDED_DIRS } from "../../shared/excluded-dirs"
 import type { CommandFrontmatter } from "../../features/claude-code-command-loader/types"
 import { isMarkdownFile } from "../../shared/file-utils"
-import { getClaudeConfigDir, log } from "../../shared"
+import { getClaudeConfigDir } from "../../shared/claude-config-dir"
+import { log } from "../../shared/logger"
 import { loadBuiltinCommands } from "../../features/builtin-commands"
 import type { CommandInfo, CommandMetadata, CommandScope } from "./types"
 

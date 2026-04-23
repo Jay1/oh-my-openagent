@@ -130,18 +130,6 @@ function createPostHogClient(
           },
         })
       }
-
-      if (activityState.captureHourly) {
-        configuredClient.capture({
-          distinctId,
-          event: "omo_hourly_active",
-          properties: {
-            ...sharedProperties,
-            hour_utc: activityState.hourUTC,
-            reason,
-          },
-        })
-      }
     },
     shutdown: async () => configuredClient.shutdown(),
   }

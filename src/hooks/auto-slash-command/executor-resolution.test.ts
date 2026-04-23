@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test"
 import type { LoadedSkill } from "../../features/opencode-skill-loader"
-import * as shared from "../../shared"
-import * as slashcommand from "../../tools/slashcommand"
-import { executeSlashCommand } from "./executor"
+import * as fileReferenceResolver from "../../shared/file-reference-resolver"
+import * as commandResolver from "../../shared/command-executor/resolve-commands-in-text"
+import * as commandDiscovery from "../../tools/slashcommand/command-discovery"
 
 let resolveCommandsInTextSpy: { mockRestore: () => void } | undefined
 let resolveFileReferencesInTextSpy: { mockRestore: () => void } | undefined
 let discoverCommandsSyncSpy: { mockRestore: () => void } | undefined
 
 function setupExecutorSpies(): void {
-  resolveCommandsInTextSpy = spyOn(shared, "resolveCommandsInText")
+  resolveCommandsInTextSpy = spyOn(commandResolver, "resolveCommandsInText")
     .mockImplementation(async (content: string) => content)
-  resolveFileReferencesInTextSpy = spyOn(shared, "resolveFileReferencesInText")
+  resolveFileReferencesInTextSpy = spyOn(fileReferenceResolver, "resolveFileReferencesInText")
     .mockImplementation(async (content: string) => content)
-  discoverCommandsSyncSpy = spyOn(slashcommand, "discoverCommandsSync").mockReturnValue([
+  discoverCommandsSyncSpy = spyOn(commandDiscovery, "discoverCommandsSync").mockReturnValue([
     {
       name: "shadowed",
       metadata: { name: "shadowed", description: "builtin" },
@@ -40,6 +40,10 @@ function restoreExecutorSpies(): void {
 
 afterEach(restoreExecutorSpies)
 
+async function importExecutorModule(): Promise<typeof import("./executor")> {
+  return import(`./executor?test=${Date.now()}-${Math.random()}`)
+}
+
 function createRestrictedSkill(): LoadedSkill {
   return {
     name: "restricted-skill",
@@ -62,6 +66,7 @@ describe("executeSlashCommand resolution semantics", () => {
       args: "",
       raw: "/shadowed",
     }
+    const { executeSlashCommand } = await importExecutorModule()
 
     //#when
     const result = await executeSlashCommand(parsed, { skills: [] })
@@ -81,6 +86,7 @@ describe("executeSlashCommand resolution semantics", () => {
       args: "",
       raw: "/restricted-skill",
     }
+    const { executeSlashCommand } = await importExecutorModule()
 
     //#when
     const result = await executeSlashCommand(parsed, { skills: [createRestrictedSkill()] })
@@ -98,6 +104,7 @@ describe("executeSlashCommand resolution semantics", () => {
       args: "",
       raw: "/restricted-skill",
     }
+    const { executeSlashCommand } = await importExecutorModule()
 
     //#when
     const result = await executeSlashCommand(parsed, {
