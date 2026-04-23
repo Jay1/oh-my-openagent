@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 
 type CapturedPostHogMessage = {
   distinctId: string
@@ -35,18 +35,12 @@ function mockPostHogNode(capturedMessages: CapturedPostHogMessage[]): void {
   }))
 }
 
-function mockActivityState(state: {
-  dayUTC: string
-  hourUTC: string
-  captureDaily: boolean
-  captureHourly: boolean
-}): void {
-  mock.module("./posthog-activity-state", () => ({
-    getPostHogActivityCaptureState: () => state,
-  }))
-}
-
 describe("posthog client creation", () => {
+  beforeEach(() => {
+    mock.restore()
+    clearTelemetryEnv()
+  })
+
   afterEach(() => {
     mock.restore()
     clearTelemetryEnv()
@@ -54,9 +48,7 @@ describe("posthog client creation", () => {
 
   it("returns a no-op client when PostHog construction throws", async () => {
     // given
-    process.env.OMO_DISABLE_POSTHOG = "0"
-    process.env.OMO_SEND_ANONYMOUS_TELEMETRY = "1"
-    process.env.POSTHOG_API_KEY = "test-api-key"
+    enableTelemetryEnv()
 
     mock.module("posthog-node", () => ({
       PostHog: class {
@@ -96,7 +88,16 @@ describe("posthog client creation", () => {
 })
 
 describe("posthog trackActive emission contract", () => {
+  let resetActivityStateProvider: (() => void) | null = null
+
+  beforeEach(() => {
+    mock.restore()
+    clearTelemetryEnv()
+  })
+
   afterEach(() => {
+    resetActivityStateProvider?.()
+    resetActivityStateProvider = null
     mock.restore()
     clearTelemetryEnv()
   })
@@ -106,14 +107,13 @@ describe("posthog trackActive emission contract", () => {
     enableTelemetryEnv()
     const captured: CapturedPostHogMessage[] = []
     mockPostHogNode(captured)
-    mockActivityState({
+    const posthogModule = await importPostHogModule()
+    posthogModule.__setActivityStateProviderForTesting(() => ({
       dayUTC: "2026-04-18",
-      hourUTC: "2026-04-18T09",
       captureDaily: true,
-      captureHourly: true,
-    })
-    const { createCliPostHog } = await importPostHogModule()
-    const client = createCliPostHog()
+    }))
+    resetActivityStateProvider = posthogModule.__resetActivityStateProviderForTesting
+    const client = posthogModule.createCliPostHog()
 
     // when
     client.trackActive("distinct-cli", "run_started")
@@ -138,14 +138,13 @@ describe("posthog trackActive emission contract", () => {
     enableTelemetryEnv()
     const captured: CapturedPostHogMessage[] = []
     mockPostHogNode(captured)
-    mockActivityState({
+    const posthogModule = await importPostHogModule()
+    posthogModule.__setActivityStateProviderForTesting(() => ({
       dayUTC: "2026-04-18",
-      hourUTC: "2026-04-18T09",
       captureDaily: false,
-      captureHourly: true,
-    })
-    const { createPluginPostHog } = await importPostHogModule()
-    const client = createPluginPostHog()
+    }))
+    resetActivityStateProvider = posthogModule.__resetActivityStateProviderForTesting
+    const client = posthogModule.createPluginPostHog()
 
     // when
     client.trackActive("distinct-plugin", "plugin_loaded")
